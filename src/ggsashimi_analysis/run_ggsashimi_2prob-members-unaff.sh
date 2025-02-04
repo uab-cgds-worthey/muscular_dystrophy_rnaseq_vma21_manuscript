@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 # SLURM settings
 #SBATCH --job-name=run_ggs
