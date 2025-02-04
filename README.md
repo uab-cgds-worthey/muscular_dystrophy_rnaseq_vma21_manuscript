@@ -5,13 +5,14 @@
 Markdown](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml/badge.svg)](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml)
 <!-- markdown-link-check-enable -->
 
-X-linked myopathy with excessive autophagy (XMEA) is caused by loss-of-function (LoF) pathogenic variants in the VMA21 gene on the X-chromosome. XMEA patients develop a progressive muscle weakness caused by an impaired autophagy process resulting in the accumulation of vacuoles within skeletal muscle, liver and neurons.
+X-linked myopathy with excessive autophagy (XMEA) is caused by loss-of-function (LoF) pathogenic variants in the VMA21
+gene on the X-chromosome. XMEA patients develop a progressive muscle weakness caused by an impaired autophagy process
+resulting in the accumulation of vacuoles within skeletal muscle, liver and neurons.
 
 * **Sashimi plot**
   * [ggsashimi_analysis](./src/ggsashimi_analysis)
 * **Differential gene expression analysis**
   * [dge_analysis](notebooks/dge)
-
 
 ## Requirements
 
