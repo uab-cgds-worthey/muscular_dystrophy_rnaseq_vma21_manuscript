@@ -1,11 +1,17 @@
-# CGDS Repository Template [:pencil2: Edit this title]
+# Muscular Dystrophy Bulk RNA-Seq Analysis
 
 <!-- markdown-link-check-disable -->
 [![Perform linting -
 Markdown](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml/badge.svg)](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml)
 <!-- markdown-link-check-enable -->
 
-:pencil2: Add description of the project here.
+X-linked myopathy with excessive autophagy (XMEA) is caused by loss-of-function (LoF) pathogenic variants in the VMA21 gene on the X-chromosome. XMEA patients develop a progressive muscle weakness caused by an impaired autophagy process resulting in the accumulation of vacuoles within skeletal muscle, liver and neurons.
+
+* **Sashimi plot**
+  * [ggsashimi_analysis](./src/ggsashimi_analysis)
+* **Differential gene expression analysis**
+  * [dge_analysis](notebooks/dge)
+
 
 ## Requirements
 
