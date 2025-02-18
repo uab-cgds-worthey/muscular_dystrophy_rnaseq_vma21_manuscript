@@ -1,4 +1,5 @@
-# Muscular Dystrophy Bulk RNA-Seq Analysis
+### Muscular Dystrophy Bulk RNA-Seq Analysis
+**Manuscript:** Multi-omics analysis identifies a novel *VMA21* gene variant that dysregulates RNA splicing causing rare X-linked myopathy with excessive autophagy
 
 <!-- markdown-link-check-disable -->
 [![Perform linting -
