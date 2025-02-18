@@ -1,4 +1,4 @@
-### Muscular Dystrophy Bulk RNA-Seq Analysis
+# Muscular Dystrophy Bulk RNA-Seq Analysis
 
 <!-- markdown-link-check-disable -->
 [![Perform linting -
