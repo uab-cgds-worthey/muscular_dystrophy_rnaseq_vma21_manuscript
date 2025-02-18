@@ -14,7 +14,7 @@ resulting in the accumulation of vacuoles within skeletal muscle, liver and neur
 * **Splicing visualization via sashimi plot**
   * [ggsashimi_analysis](./src/ggsashimi_analysis)
 * **Differential gene expression analysis**
-  * [dge_analysis](notebooks/dge)
+  * [dge_analysis](./src/dge_analysis)
 
 ## Requirements
 
