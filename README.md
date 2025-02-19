@@ -12,6 +12,7 @@ gene on the X-chromosome. XMEA patients develop a progressive muscle weakness ca
 resulting in the accumulation of vacuoles within skeletal muscle, liver and neurons.
 
 ## Requirements
+
 - [R](https://www.r-project.org/) version 4.2.3 (2023-03-15)
 - [Rstudio](https://posit.co/download/rstudio-desktop/) version 2023.03.0+386
 - [ggsashimi](https://github.com/guigolab/ggsashimi)
