@@ -20,7 +20,7 @@ resulting in the accumulation of vacuoles within skeletal muscle, liver and neur
 - [ggplot2 R package](https://ggplot2.tidyverse.org/)
 - [EnhancedVolcano R package](https://github.com/kevinblighe/EnhancedVolcano)
 
-## Analysis
+## Analysis code in the respective folders
 
 - **Splicing visualization via sashimi plot**
   - [ggsashimi_analysis](./src/ggsashimi_analysis)
