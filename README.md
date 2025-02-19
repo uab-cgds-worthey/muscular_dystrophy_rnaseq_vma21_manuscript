@@ -18,7 +18,8 @@ resulting in the accumulation of vacuoles within skeletal muscle, liver and neur
 
 ## Requirements
 
-:pencil2: What are the requirements to install and run the project.
+- R version 4.2.3 (2023-03-15)
+- Rstudio version 2023.03.0+386 
 
 ## How to install
 
