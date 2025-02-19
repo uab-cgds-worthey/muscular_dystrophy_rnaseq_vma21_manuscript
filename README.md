@@ -30,4 +30,3 @@ resulting in the accumulation of vacuoles within skeletal muscle, liver and neur
 ## Manuscript preprint link
 
 - medRxiv:
-  
