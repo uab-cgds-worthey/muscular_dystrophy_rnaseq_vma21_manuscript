@@ -11,7 +11,7 @@ X-linked myopathy with excessive autophagy (XMEA) is caused by loss-of-function 
 gene on the X-chromosome. XMEA patients develop a progressive muscle weakness caused by an impaired autophagy process
 resulting in the accumulation of vacuoles within skeletal muscle, liver and neurons.
 
-### Requirements for analysis 
+### Requirements
 - [R](https://www.r-project.org/) version 4.2.3 (2023-03-15)
 - [Rstudio](https://posit.co/download/rstudio-desktop/) version 2023.03.0+386
 - [ggsashimi](https://github.com/guigolab/ggsashimi) 
@@ -19,7 +19,7 @@ resulting in the accumulation of vacuoles within skeletal muscle, liver and neur
 - [ggplot2 R package](https://ggplot2.tidyverse.org/)
 - [EnhancedVolcano R package](https://github.com/kevinblighe/EnhancedVolcano)
 
-## Analysis
+### Analysis
 
 * **Splicing visualization via sashimi plot**
   * [ggsashimi_analysis](./src/ggsashimi_analysis)
