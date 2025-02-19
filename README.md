@@ -26,3 +26,6 @@ resulting in the accumulation of vacuoles within skeletal muscle, liver and neur
   - [ggsashimi_analysis](./src/ggsashimi_analysis)
 - **Differential gene expression analysis**
   - [dge_analysis](./src/dge_analysis)
+
+## Manuscript preprint link
+- medRxiv: 
