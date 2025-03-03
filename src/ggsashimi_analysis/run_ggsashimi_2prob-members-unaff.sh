@@ -11,7 +11,7 @@
 #SBATCH --mail-user=gurpreetkaur@uabmc.edu
 
 # Working directory:
-cd /data/project/worthey_lab/projects/experimental_pipelines/gkaur/rnaseq/nf_rna_md_v3.10.1/ggsashimi/VMA21/manuscript || exit
+cd /data/project/worthey_lab/projects/experimental_pipelines/gkaur/rnaseq/nf_rna_md_v3.10.1/ggsashimi/VMA21/manuscript
 
 # Load R module
 module load R/4.1.0-foss-2021a
