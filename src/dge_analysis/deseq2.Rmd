@@ -1,1 +1,350 @@
+---
+title: "RNA-Seq differential gene expression analysis for muscular dystrophy samples"
+author: "Gurpreet Kaur"
+date: "`r Sys.Date()`"
+output: html_document
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/Users/gurpreetkaur/Projects/RNA-Seq/MuscDyst/analysis/nf-core_rnaseq_v3.10.1')
+getwd()
+```
+
+***
+# BiocManager Installation
+```{r, BiocManager Installation}
+if (!requireNamespace("BiocManager", quietly = TRUE))             
+install.packages("BiocManager")
+```
+
+***
+# Create required folders
+```{r, create folders}
+if (!dir.exists("data")) {
+  dir.create("data")
+}
+if (!dir.exists("star_salmon")) {
+  dir.create("star_salmon")
+}
+if (!dir.exists("multiqc")) {
+  dir.create("multiqc")
+}
+if (!dir.exists("deseq2")) {
+  dir.create("deseq2")
+}
+if (!dir.exists("deseq2/results")) {
+  dir.create("deseq2/results")
+}
+if (!dir.exists("deseq2/results/batch-corr_limma")) {
+  dir.create("deseq2/results/batch-corr_limma")
+}
+if (!dir.exists("deseq2/results/batch-corr_limma/plotCounts")) {
+  dir.create("deseq2/results/batch-corr_limma/plotCounts")
+}
+```
+
+***
+# 1) Prepartion of input files
+```{r, read counts file}
+library(readr)
+counts = read_tsv(file.path(getwd(),"star_salmon","salmon.merged.gene_counts_length_scaled.tsv"))
+counts = data.frame(counts, row.names = 1)         
+counts$Ensembl_ID = row.names(counts)
+drop = c("Ensembl_ID","gene_name")
+gene_names = counts[,drop]    
+counts = counts[ , !(names(counts) %in% drop)]     
+head(counts,5)
+```
+
+```{r} 
+# Analyze sample-related data (metadata), edit for desired columns, make in same sample order as per counts and read in
+library(readr)
+samples_all4deseq = read_csv(file.path(getwd(),"data","samples_all_edit.csv"))
+row.names(samples_all4deseq) = samples_all4deseq$Samples_id
+View(samples_all4deseq)
+```
+
+```{r}
+# Check consistency in samples name and order in counts and samples_all4deseq  
+## Edit and read file (sample_all_edit.csv) again if not TRUE
+all(rownames(samples_all4deseq) %in% colnames(counts))                   
+all(rownames(samples_all4deseq) == colnames(counts))           
+```
+
+# 2) DESeq2 Analysis
+```{r, assign factors for DESeq2 design}
+library(DESeq2)                    # DESeq2_1.36.0; R version 4.2.3
+samples_all4deseq
+samples_all4deseq$Family = factor(samples_all4deseq$Family)  
+samples_all4deseq$Affected = factor(samples_all4deseq$Affected) 
+samples_all4deseq$Replicate = factor(samples_all4deseq$Replicate) 
+samples_all4deseq$Batch = factor(samples_all4deseq$Batch) 
+# Need later for labelling
+samples_all4deseq$Gender = factor(samples_all4deseq$Gender) 
+samples_all4deseq$Relation = factor(samples_all4deseq$Relation) 
+```
+
+```{r, Affected_Yes_vs_No}
+dds <- DESeqDataSetFromMatrix(countData = round(counts), colData = samples_all4deseq, design = ~ Batch + Replicate + Family + Affected)
+dim(dds)
+```
+
+```{r}
+# Pre-filtering: Keep only rows that have atleast 10 reads total
+keep = rowSums(counts(dds)) >= 10 
+dds = dds[keep,]
+dim(dds)
+```
+
+```{r}
+# Differential expression analysis via DESeq() [do normalization as well]
+dds = DESeq(dds)
+head(counts(dds, normalized=TRUE))
+resultsNames(dds)
+```
+
+```{r}
+resultsNames(dds)
+```
+
+```{r}
+# Normalize gene counts for differences in seq. depth/global differences
+counts_norm = counts(dds, normalized=TRUE)
+```
+
+***
+# 3) Count data transformation 
+```{r}
+vsd = vst(dds, blind=FALSE) 
+```
+
+***
+# 4) Batch correction
+```{r}
+counts_vst = assay(vsd)
+write.csv(counts_vst, file="./deseq2/results/counts_vst.csv")
+mm = model.matrix(~ Replicate + Family + Affected, colData(vsd))
+#BiocManager::install("limma")
+counts_vst_limma = limma::removeBatchEffect(counts_vst, batch=vsd$Batch, design=mm)
+#dir.create("./deseq2/results/batch-corr_limma")
+write.csv(counts_vst_limma, file="./deseq2/results/batch-corr_limma/counts_vst_limma.csv")
+```
+
+```{r}
+vsd_limma = vsd
+assay(vsd_limma) = counts_vst_limma
+```
+
+***
+# 5) All 8 familes
+## (i) DEGs
+```{r}
+res_aff_vs_unaff = results(dds, contrast=c("Affected", "Yes", "No"))
+res_aff_vs_unaff= res_aff_vs_unaff[order(res_aff_vs_unaff$padj),]
+head(res_aff_vs_unaff)
+summary(res_aff_vs_unaff)
+write.csv(res_aff_vs_unaff, file="./deseq2/results/batch-corr_limma/res_aff_vs_unaff.csv")      
+res_aff_vs_unaff_df = as.data.frame(res_aff_vs_unaff)
+res_aff_vs_unaff_05 = subset(res_aff_vs_unaff_df, padj < 0.05)      # 1957 obs. 
+```
+
+## (ii) plotCounts: Genes
+```{r}
+# Create the deseq2/results/batch-corr_limma/plotCounts_noid folder
+if (!dir.exists("deseq2/results/batch-corr_limma/plotCounts_noid")) {
+  dir.create("deseq2/results/batch-corr_limma/plotCounts_noid")
+}
+```
+
+```{r}
+# Add Patient_id col manually and read file
+samples_all4deseq_pid = readr::read_csv(file.path(getwd(),"data","samples_all_edit_pid.csv"))
+row.names(samples_all4deseq_pid) = samples_all4deseq_pid$Samples_id
+```
+
+```{r}
+# Genes of interest (goi)
+genes = c("VMA21","ENO3") 
+vsd_limma_genename = merge(x=gene_names, y=assay(vsd_limma), by.x = "Ensembl_ID", by.y="row.names")
+goi = intersect(genes, vsd_limma_genename$gene_name)
+```
+
+```{r}
+# Extract genes table from res
+goi_table = res_aff_vs_unaff_df_genename[res_aff_vs_unaff_df_genename$gene_name %in% goi, ]
+write.csv(goi_table, file="./deseq2/results/batch-corr_limma/res_aff_vs_unaff_df_genename_genes.csv")
+```
+
+```{r}
+# Define colors for 8 families
+library(RColorBrewer)
+additional_colors <- brewer.pal(8, "Set1")
+    
+# Remove two colors to replace with salmon and royalblue for specific families   # for family 2 and 8
+additional_colors <- setdiff(additional_colors, c("salmon", "royalblue")) 
+# Function to map specific family values to colors
+assign_colors <- function(family_levels) 
+  {
+    # Start by making a named list of colors, initially empty
+    color_map <- setNames(vector("character", length(family_levels)), family_levels)
+    # Set specific colors for known values
+    color_map["2"] <- "salmon"
+    color_map["8"] <- "royalblue"
+    # Assign remaining colors from the palette to other family values
+    remaining_values <- setdiff(family_levels, c("2", "8"))
+    color_map[remaining_values] <- head(additional_colors, length(remaining_values))
+    return(color_map)
+}
+
+# Make plotCounts boxplot
+genes_oi_plot_Ensembl   = goi_table$Ensembl_ID
+genes_oi_plot_gene_name = goi_table$gene_name
+genes_oi_plot_padj      = goi_table$padj
+genes_oi_plot_log2FC    = goi_table$log2FoldChange
+Family = factor(samples_all4deseq_pid$Family) 
+
+library(DESeq2)
+library(ggplot2)
+library(ggrepel)
+
+for (i in seq_along(genes_oi_plot_Ensembl)) {
+boxplot_counts = plotCounts(dds, gene=genes_oi_plot_Ensembl[i],  intgroup=c("Affected"),  returnData=TRUE, normalized = T)
+boxplot_counts$variable = row.names(boxplot_counts)
+    
+    # Add 'Patient_id' and 'Replicate' as new columns and update row names
+      boxplot_counts$Replicate  = samples_all4deseq_pid[rownames(boxplot_counts), "Replicate", drop = TRUE]
+      boxplot_counts$Patient_id = samples_all4deseq_pid[rownames(boxplot_counts), "Patient_id", drop = TRUE]
+      boxplot_counts$Family     = samples_all4deseq_pid[rownames(boxplot_counts), "Family", drop = TRUE]
+      rownames(boxplot_counts)  = with(samples_all4deseq_pid[rownames(boxplot_counts), ], paste(Family, Relation, Replicate, sep = "_"))
+      
+      boxplot_counts$Family <- as.factor(boxplot_counts$Family)
+    
+    # Retrieve unique family values and assign colors
+      family_levels <- levels(boxplot_counts$Family)
+      family_colors <- assign_colors(family_levels)
+    
+      plot = ggplot(data=boxplot_counts, aes(x=Affected, y=count, fill=Affected)) +
+            geom_boxplot(position=position_dodge()) + 
+            geom_jitter(position=position_dodge(.8)) + 
+            labs(title = paste("Gene",genes_oi_plot_gene_name[i],sep = "_",genes_oi_plot_Ensembl[i]), 
+           subtitle = paste("padj=",genes_oi_plot_padj[i],"; log2FC=",genes_oi_plot_log2FC[i])) + 
+          xlab("") + ylab("Normalized gene counts") + 
+          theme_bw() + theme(text = element_text(size=6), axis.text.x = element_text(angle=45, vjust=1,hjust=1)) +    
+          scale_fill_manual(values = c("No"= "grey90", "Yes"= "grey40")) + 
+          scale_color_manual(values = family_colors) +
+        geom_point(data=boxplot_counts, aes(x=Affected, y=count, color=Family), size = 2) +
+        geom_text_repel(aes(label = rownames(boxplot_counts), color=Family), min.segment.length = 0, max.overlaps = Inf, box.padding = 0.5) 
+    ggsave(filename=paste("Gene-of-interest",genes_oi_plot_gene_name[i],"_",genes_oi_plot_Ensembl[i],".png"), 
+           width=10, height=5, plot=plot, path = "./deseq2/results/batch-corr_limma/plotCounts_noid")
+}
+```
+
+***
+# 6) 2 familes: 2_vs_8
+## (i) DEGs
+```{r}
+res_2_vs_8 = results(dds, contrast=c("Family", "2", "8"))
+res_2_vs_8 = res_2_vs_8[order(res_2_vs_8$padj),]
+head(res_2_vs_8)
+summary(res_2_vs_8)
+res_2_vs_8_df = as.data.frame(res_2_vs_8)
+
+# Add genename
+res_2_vs_8_df_genename = res_2_vs_8_df
+res_2_vs_8_df_genename$Ensembl_ID = row.names(res_2_vs_8_df)
+res_2_vs_8_df_genename = merge(x=res_2_vs_8_df_genename, y=gene_names, by.x ="Ensembl_ID", by.y="Ensembl_ID", all.x=T)
+res_2_vs_8_df_genename = res_2_vs_8_df_genename[,c(dim(res_2_vs_8_df_genename)[2],1:dim(res_2_vs_8_df_genename)[2]-1)]
+res_2_vs_8_df_genename = res_2_vs_8_df_genename[order(res_2_vs_8_df_genename[,"padj"]),]
+write.csv(res_2_vs_8_df_genename,file="./deseq2/results/batch-corr_limma/family2vs8/res_2_vs_8_genename.csv" )
+
+# Subset: padj<0.05 }
+res_2_vs_8_df_genename_05= subset(res_2_vs_8_df_genename, padj < 0.05)                    
+res_2_vs_8_df_genename_05 = res_2_vs_8_df_genename_05[order(res_2_vs_8_df_genename_05$padj),]
+head(res_2_vs_8_df_genename_05)
+summary(res_2_vs_8_df_genename_05)
+write.csv(res_2_vs_8_df_genename_05, file="./deseq2/results/batch-corr_limma/family2vs8/res_2_vs_8_df_genename_05.csv")     # 137
+```
+
+## (ii) Volcano plot
+```{r} 
+#devtools::install_github('kevinblighe/EnhancedVolcano')      # v1.13.2; FCcutoff = 1 (default)
+library(EnhancedVolcano)
+png("./deseq2/results/batch-corr_limma/family2vs8/EnhancedVolcano_res_2_vs_8_all-degs.png", width = 2600, height = 3000, res=300)
+EnhancedVolcano(res_2_vs_8_df_genename, lab = res_2_vs_8_df_genename$gene_name, 
+    x = 'log2FoldChange',  y = 'padj', title = 'Family 2 vs 8', subtitle = 'All DEGs (padjcutoff=0.05, FCcutoff = 1)' ,
+    pCutoff = 0.05, FCcutoff = 1, pointSize = 2.0,  labSize = 3.0, legendLabels=c('Not sig.','log2FC','padj', 'padj & log2FC'))
+dev.off()
+```
+
+## (iii) plotCounts: Genes
+```{r}
+# Create the deseq2/results/batch-corr_limma/plotCounts folder
+if (!dir.exists("deseq2/results/batch-corr_limma/family2vs8/plotCounts_goi")) {
+  dir.create("deseq2/results/batch-corr_limma/family2vs8/plotCounts_goi")
+}
+```
+
+```{r}
+# Read patient info
+samples_family2and8 = read_csv(file.path(getwd(),"data","samples_family2and8.csv"))
+row.names(samples_family2and8) = samples_family2and8$Samples_id
+```
+
+```{r}
+# Extract genes table from res
+goi_table_2_vs_8 = res_2_vs_8_df_genename[res_2_vs_8_df_genename$gene_name %in% goi, ]
+write.csv(goi_table_2_vs_8, file="./deseq2/results/batch-corr_limma/family2vs8/res_2_vs_8_df_genename_goi.csv")
+```
+
+```{r}
+# Make plotCounts boxplot
+genes_oi_plot_Ensembl   = goi_table_2_vs_8$Ensembl_ID
+genes_oi_plot_gene_name = goi_table_2_vs_8$gene_name
+genes_oi_plot_padj      = goi_table_2_vs_8$padj
+genes_oi_plot_log2FC    = goi_table_2_vs_8$log2FoldChange
+Family = factor(samples_family2and8$Family)  
+
+for (i in seq_along(genes_oi_plot_Ensembl)) {
+boxplot_counts = plotCounts(dds, gene=genes_oi_plot_Ensembl[i], intgroup=c("Affected"), returnData=TRUE, normalized = T)
+boxplot_counts$variable = row.names(boxplot_counts)
+    
+    # Find intersection of rownames
+    common_rownames = intersect(rownames(boxplot_counts), rownames(samples_family2and8))      # Family 2 and 8
+    
+    # Subset boxplot_counts based on common rownames
+    boxplot_counts_2_and_8 = boxplot_counts[common_rownames, , drop=FALSE]
+    
+    # Add 'Patient_id' and 'Replicate' as new columns and update row names
+      boxplot_counts_2_and_8$Replicate = samples_family2and8[rownames(boxplot_counts_2_and_8), "Replicate", drop = TRUE]
+      boxplot_counts_2_and_8$Patient_id = samples_family2and8[rownames(boxplot_counts_2_and_8), "Patient_id", drop = TRUE]
+      boxplot_counts_2_and_8$Family = samples_family2and8[rownames(boxplot_counts_2_and_8), "Family", drop = TRUE]
+      rownames(boxplot_counts_2_and_8) = with(samples_family2and8[rownames(boxplot_counts_2_and_8), ], paste(Patient_id, Replicate, sep = "_"))
+
+    # Plot
+    boxplot_counts_2_and_8$Family = as.factor(boxplot_counts_2_and_8$Family)  
+    plot = ggplot2::ggplot(data=boxplot_counts_2_and_8, aes(x=Affected, y=count, fill=Affected)) +
+    geom_boxplot(position=position_dodge()) + 
+    geom_jitter(position=position_dodge(.8)) + 
+    labs(title = paste("Gene",genes_oi_plot_gene_name[i],sep = "_",genes_oi_plot_Ensembl[i]), 
+         subtitle = paste("padj=",genes_oi_plot_padj[i],"; log2FC=",genes_oi_plot_log2FC[i])) + 
+        xlab("") + ylab("Normalized gene counts") + 
+        theme_bw() + theme(text = element_text(size=6), axis.text.x = element_text(angle=45, vjust=1,hjust=1)) +    
+        scale_fill_manual(values = c("No"= "grey90", "Yes"= "grey40"))  + 
+        scale_color_manual(values = c("2" = "salmon", "8" = "royalblue")) +
+        #geom_point(data=boxplot_counts_2_and_8, aes(x=Affected, y=count, color=Family), size = 2) +
+        geom_point(data=boxplot_counts_2_and_8, aes(color=Family), size = 2) +
+      ggrepel::geom_text_repel(aes(label = rownames(boxplot_counts_2_and_8), color=Family), min.segment.length = 0, max.overlaps = Inf, box.padding = 0.5) 
+    
+    ggsave(filename=paste("Gene-of-interest_",genes_oi_plot_gene_name[i],"_",genes_oi_plot_Ensembl[i],".png"), 
+           width=10, height=5, plot=plot, path = "./deseq2/results/batch-corr_limma/family2vs8/plotCounts_goi")
+}
+```
+
+***
+# Save packages info 
+```{r}
+sink("./sessionInfo.txt")
+sessionInfo()
+sink()
+```
