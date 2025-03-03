@@ -23,8 +23,7 @@ resulting in the accumulation of vacuoles within skeletal muscle, liver and neur
 
 ## Analysis code in the respective folders
 
-Scripts and notebooks utilized as part of this study are listed below. Please see them for files (gene annotation,
-etc.) necessary to run them successfully.
+Scripts wrote as a part of this study are listed below in the respective folders. Please refer them for files (gene annotation, etc.) necessary to run them successfully.
 
 - **Splicing visualization via sashimi plot**
   - [ggsashimi_analysis](./src/ggsashimi_analysis)
