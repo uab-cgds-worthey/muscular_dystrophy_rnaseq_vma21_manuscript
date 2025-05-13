@@ -1,4 +1,4 @@
-# Muscular Dystrophy Bulk RNA-Seq Analysis
+# Muscular Dystrophy Bulk RNA-Seq Analysis (DGE and Sashimi)
 
 <!-- markdown-link-check-disable -->
 [![Perform linting -
