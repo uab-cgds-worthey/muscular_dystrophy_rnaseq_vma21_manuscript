@@ -34,3 +34,6 @@ files (gene annotation, etc.) necessary to run them successfully.
 ## Manuscript preprint link
 
 - medRxiv:
+
+## Author: 
+[Gurpreet Kaur](https://github.com/gurpreet-bioinfo)
