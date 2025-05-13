@@ -36,4 +36,4 @@ files (gene annotation, etc.) necessary to run them successfully.
 - medRxiv:
 
 ## Author: 
-[Gurpreet Kaur](https://github.com/gurpreet-bioinfo)
+[Gurpreet Kaur](https://github.com/gurpreet-bioinfo) 
