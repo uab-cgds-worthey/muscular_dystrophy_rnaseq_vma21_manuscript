@@ -1,11 +1,10 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15425697.svg)](https://doi.org/10.5281/zenodo.15425697)
-
 # Muscular Dystrophy Bulk RNA-Seq Analysis
 
 <!-- markdown-link-check-disable -->
 [![Perform linting -
 Markdown](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml/badge.svg)](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml)
 <!-- markdown-link-check-enable -->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15425697.svg)](https://doi.org/10.5281/zenodo.15425697)
 
 **Manuscript:** Multi-omics analysis identifies a novel *VMA21* gene variant that dysregulates RNA splicing causing rare
 X-linked myopathy with excessive autophagy
