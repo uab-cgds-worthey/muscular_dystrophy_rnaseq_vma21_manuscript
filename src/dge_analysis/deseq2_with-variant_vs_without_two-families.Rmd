@@ -1,0 +1,201 @@
+---
+title: "deseq2_with-variant_vs_without_two-families.Rmd"
+author: "Gurpreet Kaur"
+date: "04/28/2025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/Users/gurpreetkaur/Projects/RNA-Seq/MuscDyst/analysis/nf-core_rnaseq_v3.10.1')
+getwd()
+```
+
+***
+###### (I) Prep
+# Create folder for results
+```{r}
+# Create analysis folder
+if (!dir.exists("deseq2/results/batch-corr_limma/with-variant_vs_without_two-families")) {
+  dir.create("deseq2/results/batch-corr_limma/with-variant_vs_without_two-families")
+}
+```
+
+# Read metadata file
+```{r}
+# Analyze sample-related data (metadata), edit for desired columns, make in same sample order as per counts and read in
+library(readr)
+samples_all4deseq_pid_variant = read_csv(file.path(getwd(),"data","samples_all_edit_pid_variant2families.csv"))    # Table S1
+row.names(samples_all4deseq_pid_variant) = samples_all4deseq_pid_variant$Samples_id
+View(samples_all4deseq_pid_variant)
+```
+
+```{r}
+# Subset countData to match the samples
+counts_variant <- counts[, rownames(samples_all4deseq_pid_variant)]
+```
+
+```{r}
+# Check consistency in samples name and order in counts and samples_all4deseq
+## Edit and read file (sample_all_edit.csv) again if not TRUE
+all(rownames(samples_all4deseq_pid_variant) %in% colnames(counts_variant))
+all(rownames(samples_all4deseq_pid_variant) == colnames(counts_variant))
+```
+
+###### (II) DESeq2 Analysis
+# Assign factors for DESeq2 design
+```{r, assign factors for DESeq2 design}
+library(DESeq2)                    # DESeq2_1.36.0; R version 4.2.3
+samples_all4deseq_pid_variant$Family         = factor(samples_all4deseq_pid_variant$Family)
+samples_all4deseq_pid_variant$VMA21_variant  = factor(samples_all4deseq_pid_variant$VMA21_variant)
+samples_all4deseq_pid_variant$Replicate      = factor(samples_all4deseq_pid_variant$Replicate)
+samples_all4deseq_pid_variant$Batch          = factor(samples_all4deseq_pid_variant$Batch)
+# Need later for labelling
+samples_all4deseq_pid_variant$Sex      = factor(samples_all4deseq_pid_variant$Sex)
+samples_all4deseq_pid_variant$Relation = factor(samples_all4deseq_pid_variant$Relation)
+
+rownames(samples_all4deseq_pid_variant) <- samples_all4deseq_pid_variant$Samples_id
+```
+
+# Create the new DESeqDataSet object
+## Family 2 and 8 probands and their mothers with VMA21 variant vs their fathers without variant
+```{r}
+### Two factors/variables: type (2 levels, main variable of interest so at the end) and family (6 levels). Here, design measures the effect of condition, controlling family differences
+
+dds_variant <- DESeqDataSetFromMatrix(countData = round(counts_variant), colData = samples_all4deseq_pid_variant, design = ~ Batch + Replicate + Family + VMA21_variant)
+dim(dds_variant)
+```
+
+# Pre-filtering: Keep only rows that have atleast 10 reads total
+```{r}
+keep = rowSums(counts(dds_variant)) >= 10
+dds_variant = dds_variant[keep,]
+dim(dds_variant)
+```
+
+# Differential expression analysis via DESeq() [do normalization as well]
+```{r}
+dds_variant = DESeq(dds_variant)
+head(counts(dds_variant, normalized=TRUE))
+resultsNames(dds_variant)
+```
+
+```{r}
+saveRDS(dds_variant, file = "./dds_variant.rds")
+```
+
+###### (III) Transformation and check PCA for batch effect
+# Run vsd
+```{r}
+vsd_variant = vst(dds_variant, blind=FALSE)
+head(assay(vsd_variant), 3)
+saveRDS(vsd_variant, file = "./vsd_variant.rds")
+```
+
+###### (IV) Batch correction and check with PCA
+# limma::removeBatchEffect()
+```{r}
+counts_vst_variant = assay(vsd_variant)
+mm = model.matrix(~ Replicate + Family + VMA21_variant, colData(vsd_variant))
+counts_vst_variant_limma = limma::removeBatchEffect(counts_vst_variant, batch=vsd_variant$Batch, design=mm)
+write.csv(counts_vst_variant_limma, file="./deseq2/results/batch-corr_limma/with-variant_vs_without_two-families/counts_vst_variant_limma.csv")
+```
+
+```{r}
+vsd_variant_limma = vsd_variant
+assay(vsd_variant_limma) = counts_vst_variant_limma
+saveRDS(vsd_variant_limma, file = "./vsd_variant_limma.rds")
+```
+
+###### (V) Contrast: VMA21_variant_Yes_vs_No
+```{r}
+resultsNames(dds_variant)
+```
+
+# (1) Retreive DEGs for VMA21_variant_Yes_vs_No: res_aff_vs_unaff, genename and res_aff_vs_unaff_05
+```{r}
+res_variant_vs_novariant_variant = results(dds_variant, contrast=c("VMA21_variant", "Yes", "No"))
+res_variant_vs_novariant_variant = res_variant_vs_novariant_variant[order(res_variant_vs_novariant_variant$padj),]
+head(res_variant_vs_novariant_variant)
+res_variant_vs_novariant_variant_df = as.data.frame(res_variant_vs_novariant_variant)
+
+# Adding gene name
+res_variant_vs_novariant_variant_df_genename = res_variant_vs_novariant_variant_df
+res_variant_vs_novariant_variant_df_genename$Ensembl_ID = row.names(res_variant_vs_novariant_variant_df)
+res_variant_vs_novariant_variant_df_genename = merge(x=res_variant_vs_novariant_variant_df_genename, y=gene_names, by.x ="Ensembl_ID", by.y="Ensembl_ID", all.x=T)
+res_variant_vs_novariant_variant_df_genename = res_variant_vs_novariant_variant_df_genename[,c(dim(res_variant_vs_novariant_variant_df_genename)[2],1:dim(res_variant_vs_novariant_variant_df_genename)[2]-1)]
+res_variant_vs_novariant_variant_df_genename = res_variant_vs_novariant_variant_df_genename[order(res_variant_vs_novariant_variant_df_genename[,"padj"]),]
+rownames(res_variant_vs_novariant_variant_df_genename) = res_variant_vs_novariant_variant_df_genename$Ensembl_ID
+
+# Significant: padj<0.05
+res_variant_vs_novariant_variant_df_genename_05 = subset(res_variant_vs_novariant_variant_df_genename, padj < 0.05)    # 352 degs
+res_variant_vs_novariant_variant_df_genename_05 = res_variant_vs_novariant_variant_df_genename_05[order(res_variant_vs_novariant_variant_df_genename_05$padj),]
+head(res_variant_vs_novariant_variant_df_genename_05)
+#summary(res_variant_vs_novariant_variant_df_genename_05)
+
+# Save
+write.csv(res_variant_vs_novariant_variant_df_genename,    file = "./deseq2/results/batch-corr_limma/with-variant_vs_without_two-families/res_variant_vs_novariant_variant_genename.csv" )
+write.csv(res_variant_vs_novariant_variant_df_genename_05, file = "./deseq2/results/batch-corr_limma/with-variant_vs_without_two-families/res_variant_vs_novariant_variant_genename_05.csv")
+```
+
+# (2) DEGs individual plots: plotCounts for VMA21
+```{r }
+# Check for presence of genes
+library(genefilter)
+library(pheatmap)
+goi = c("VMA21","ENO3")
+
+# Extract genes table from res
+goi = res_variant_vs_novariant_variant_df_genename[res_variant_vs_novariant_variant_df_genename$gene_name %in% goi, ]
+
+library(writexl)
+write_xlsx(goi, "./deseq2/results/batch-corr_limma/with-variant_vs_without_two-families/res_variant_vs_novariant_goi.xlsx")
+
+# Create the deseq2/results/batch-corr_limma/plotCounts folder
+if (!dir.exists("deseq2/results/batch-corr_limma/with-variant_vs_without_two-familiesd/plotCounts_goi")) {
+  dir.create("deseq2/results/batch-corr_limma/with-variant_vs_without_two-families/plotCounts_goi")
+}
+
+goi_table = goi
+
+# Make plotCounts boxplot
+genes_oi_plot_Ensembl   = goi_table$Ensembl_ID
+genes_oi_plot_gene_name = goi_table$gene_name
+genes_oi_plot_padj      = goi_table$padj
+genes_oi_plot_log2FC    = goi_table$log2FoldChange
+Family = factor(samples_all4deseq_pid_variant$Family)
+for (i in seq_along(genes_oi_plot_Ensembl)) {
+    boxplot_counts = plotCounts(dds_variant, gene=genes_oi_plot_Ensembl[i], intgroup=c("VMA21_variant"), returnData=TRUE, normalized = T)
+
+ boxplot_counts$variable = row.names(boxplot_counts)
+
+    # Add 'Patient_id' and 'Replicate' as new columns and update row names
+      boxplot_counts$Patient_id  = samples_all4deseq_pid_variant[rownames(boxplot_counts), "Patient_id", drop = TRUE]
+      #boxplot_counts$Family     = samples_all4deseq_pid_variant[rownames(boxplot_counts), "Family", drop = TRUE]
+      #boxplot_counts$Relation   = samples_all4deseq_pid_variant[rownames(boxplot_counts), "Relation", drop = TRUE]
+      boxplot_counts$Replicate  = samples_all4deseq_pid_variant[rownames(boxplot_counts), "Replicate", drop = TRUE]
+   #  rownames(boxplot_counts)  = with(samples_all4deseq_pid_variant[rownames(boxplot_counts), ], paste(Family, Relation, Replicate, sep = "_"))
+      rownames(boxplot_counts)  = with(samples_all4deseq_pid_variant[rownames(boxplot_counts), ], paste(Patient_id, Replicate, sep = "_"))
+
+      #boxplot_counts$Family <- as.factor(boxplot_counts$Family)
+
+    # Retrieve unique family values and assign colors
+      family_levels <- levels(boxplot_counts$Family)
+      family_colors <- assign_colors(family_levels)
+
+    plot = ggplot(data=boxplot_counts, aes(x=VMA21_variant, y=count, fill=VMA21_variant)) +
+    geom_boxplot(position=position_dodge()) +
+    geom_jitter(position=position_dodge(.8)) +
+    labs(title = paste("Gene",genes_oi_plot_gene_name[i],sep = "_",genes_oi_plot_Ensembl[i]),
+         subtitle = paste("padj=",genes_oi_plot_padj[i],"; log2FC=",genes_oi_plot_log2FC[i])) +
+        xlab("") + ylab("Normalized gene counts") +
+        theme_bw() + theme(text = element_text(size=6), axis.text.x = element_text(angle=45, vjust=1,hjust=1)) +
+        scale_fill_manual(values = c("No"= "grey90", "Yes"= "grey40")) +
+        scale_color_manual(values = family_colors) +
+       # geom_point(color = "grey70", size=0.2) +
+        geom_point(data=boxplot_counts, aes(x=VMA21_variant, y=count, color=Family), size = 2) +
+        geom_text_repel(aes(label = rownames(boxplot_counts), color=Family), min.segment.length = 0, max.overlaps = Inf, box.padding = 0.5)
+    ggsave(filename=paste("goi_",genes_oi_plot_gene_name[i],"_",genes_oi_plot_Ensembl[i],".png"),
+           width=10, height=5, plot=plot, path = "./deseq2/results/batch-corr_limma/with-variant_vs_without_two-families/plotCounts_goi")
+}
+```

@@ -1,0 +1,280 @@
+---
+title: "deseq2_2probands_vs_unaffected"
+author: "Gurpreet Kaur"
+date: "17 March 2025"
+output: html_document
+---
+
+***
+###### (I) Prep
+# Create folder for results
+```{r}
+# Create analysis folder
+if (!dir.exists("deseq2/results/batch-corr_limma/2probands_vs_unaffected")) {
+  dir.create("deseq2/results/batch-corr_limma/2probands_vs_unaffected")
+}
+```
+
+# Define the list of sample IDs to exclude and run DESeq
+```{r}
+# 7 probands from other 6 families (family 6 has 2 probands), mothers of family 2 (3 rep) and mother of family 8 = 12 samples -> 35-12 = 23 samples
+exclude_ids <- c("LW000002_r", "LW000006_r", "LW000009_r", "LW000011_r", "LW000088_r", "LW002056", "LW002066" , "LW002072",
+                 "LW000005_r", "LW000005_r_top", "LW000005_r_deep_LW002086",
+                 "LW002076")
+
+# Subset colData to exclude unwanted samples and set 'Samples_id' column as the row names in the samples_subset data frame
+samples_subset <- samples_all4deseq_pid[!(rownames(samples_all4deseq_pid) %in% exclude_ids), ]
+rownames(samples_subset) <- samples_subset$Samples_id
+
+library(writexl)
+write_xlsx(samples_subset, "./data/samples_subset.xlsx")
+
+# Subset countData to match the samples
+counts_subset <- counts[, rownames(samples_subset)]
+```
+
+###### (II) DESeq2 Analysis
+# Assign factors for DESeq2 design
+```{r}
+library(DESeq2)                    # DESeq2_1.36.0; R version 4.2.3
+samples_subset$Affected  = factor(samples_subset$Affected)
+samples_subset$Family    = factor(samples_subset$Family)
+samples_subset$Replicate = factor(samples_subset$Replicate)
+samples_subset$Batch     = factor(samples_subset$Batch)
+samples_subset$Gender    = factor(samples_subset$Gender)
+samples_subset$Relation  = factor(samples_subset$Relation)
+samples_subset$Patient_id  = factor(samples_subset$Patient_id)
+
+# Create the new DESeqDataSet object
+dds_subset <- DESeqDataSetFromMatrix(countData = round(counts_subset), colData = samples_subset, design = ~ Batch + Replicate + Family + Affected)
+
+dds_subset
+```
+# Pre-filtering: Keep only rows that have atleast 10 reads total
+```{r}
+keep_subset = rowSums(counts(dds_subset)) >= 10
+dds_subset = dds_subset[keep_subset,]
+dim(dds_subset)
+```
+
+# Differential expression analysis via DESeq() [do normalization as well]
+```{r}
+dds_subset = DESeq(dds_subset)
+head(counts(dds_subset, normalized=TRUE))
+resultsNames(dds_subset)
+```
+```{r}
+saveRDS(dds_subset, file = "./dds_subset.rds")
+```
+
+###### (III) Transformation and check PCA for batch effect
+# Run vsd
+```{r}
+vsd_subset = vst(dds_subset, blind=FALSE)
+head(assay(vsd_subset), 3)
+saveRDS(vsd_subset, file = "./vsd_subset.rds")
+```
+
+###### (IV) Batch correction and check with PCA
+# limma::removeBatchEffect()
+```{r}
+counts_vst_subset = assay(vsd_subset)
+mm = model.matrix(~ Replicate + Family + Affected, colData(vsd_subset))
+counts_vst_subset_limma = limma::removeBatchEffect(counts_vst_subset, batch=vsd_subset$Batch, design=mm)
+write.csv(counts_vst_subset_limma, file="./deseq2/results/batch-corr_limma/2probands_vs_unaffected/counts_vst_subset_limma.csv")
+```
+
+```{r}
+vsd_subset_limma = vsd_subset
+assay(vsd_subset_limma) = counts_vst_subset_limma
+saveRDS(vsd_subset_limma, file = "./vsd_subset_limma.rds")
+```
+
+###### (V) Contrast: Affected_Yes_vs_No
+```{r}
+resultsNames(dds_subset)
+```
+
+# (1) Retreive DEGs: res_aff_vs_unaff, genename and res_aff_vs_unaff_05
+```{r}
+res_aff_vs_unaff_subset = results(dds_subset, contrast=c("Affected", "Yes", "No"))
+res_aff_vs_unaff_subset = res_aff_vs_unaff_subset[order(res_aff_vs_unaff_subset$padj),]
+head(res_aff_vs_unaff_subset)
+#summary(res_aff_vs_unaff_subset)
+res_aff_vs_unaff_subset_df = as.data.frame(res_aff_vs_unaff_subset)
+
+# Adding gene name
+res_aff_vs_unaff_subset_df_genename = res_aff_vs_unaff_subset_df
+res_aff_vs_unaff_subset_df_genename$Ensembl_ID = row.names(res_aff_vs_unaff_subset_df)
+res_aff_vs_unaff_subset_df_genename = merge(x=res_aff_vs_unaff_subset_df_genename, y=gene_names, by.x ="Ensembl_ID", by.y="Ensembl_ID", all.x=T)
+res_aff_vs_unaff_subset_df_genename = res_aff_vs_unaff_subset_df_genename[,c(dim(res_aff_vs_unaff_subset_df_genename)[2],1:dim(res_aff_vs_unaff_subset_df_genename)[2]-1)]
+res_aff_vs_unaff_subset_df_genename = res_aff_vs_unaff_subset_df_genename[order(res_aff_vs_unaff_subset_df_genename[,"padj"]),]
+rownames(res_aff_vs_unaff_subset_df_genename) = res_aff_vs_unaff_subset_df_genename$Ensembl_ID
+
+# Subset: padj<0.05
+res_aff_vs_unaff_subset_df_genename_05 = subset(res_aff_vs_unaff_subset_df_genename, padj < 0.05)                # 150 degs
+res_aff_vs_unaff_subset_df_genename_05 = res_aff_vs_unaff_subset_df_genename_05[order(res_aff_vs_unaff_subset_df_genename_05$padj),]
+head(res_aff_vs_unaff_subset_df_genename_05)
+#summary(res_aff_vs_unaff_subset_df_genename_05)
+```
+```{r}
+write.csv(res_aff_vs_unaff_subset_df_genename,    file = "./deseq2/results/batch-corr_limma/2probands_vs_unaffected/res_aff_vs_unaff_subset_genename.csv" )
+write.csv(res_aff_vs_unaff_subset_df_genename_05, file = "./deseq2/results/batch-corr_limma/2probands_vs_unaffected/res_aff_vs_unaff_subset_genename_05.csv")
+```
+
+# (2) DEGs visualization:
+## (i) Heatmaps
+```{r}
+# All 150 sig. DEGs with Family ids
+library(pheatmap)
+topgenes_aff_vs_unaff_05 = rownames(res_aff_vs_unaff_subset_df_genename_05)
+topgenes_aff_vs_unaff_05
+
+# Subsetting assay data
+topgenes_aff_vs_unaff_05 = assay(vsd_subset_limma)[topgenes_aff_vs_unaff_05,]
+
+# Centering the data
+topgenes_aff_vs_unaff_05 = topgenes_aff_vs_unaff_05 - rowMeans(topgenes_aff_vs_unaff_05)
+
+df = as.data.frame(colData(vsd_subset_limma)[,c("Batch", "Replicate", "Family", "Affected")])
+
+ann_col = list(
+          Affected = c("No"= "grey90", "Yes"= "grey40"),
+          Replicate = c("1"="saddlebrown", "2"="rosybrown", "3"="peachpuff"),
+          Batch = c("1" ="orange", "2"="blue"),
+          Family = c( "1" = "darkred", "2" = "salmon", "3" = "navy", "4" = "purple", "5" = "magenta", "6" = "seagreen", "7" = "chocolate", "8" = "royalblue" )
+            )
+
+# Column label
+matched_indices <- match(row.names(df), samples_subset$Samples_id)
+labels_col_df <- samples_subset[matched_indices, c("Family", "Relation", "Replicate")]
+  # Concatenate columns to form labels
+labels_col <- apply(labels_col_df, 1, function(x) paste(x, collapse = " - "))
+
+# Generate heatmap
+png("./deseq2/results/batch-corr_limma/2probands_vs_unaffected/heatmap_res_aff_vs_unaff_subset_150degs_famid.png", width = 5600, height = 3200, res = 300)
+ComplexHeatmap::pheatmap(topgenes_aff_vs_unaff_05, annotation_col=df, labels_row = res_aff_vs_unaff_subset_df_genename_05$gene_name,
+         annotation_colors = ann_col,
+          labels_col = labels_col,
+         scale = "row", clustering_method = "complete", clustering_distance_rows = "euclidean",
+         fontsize=10, fontsize_col=10, legend=TRUE, legend_breaks = c(-2,-1,0,1,2), fontsize_row = 5, angle_col = "45"
+         )
+dev.off()
+```
+
+# (2) DEGs visualization:
+## (ii) EnhancedVolcano - Sig. DEGs
+```{r}
+#devtools::install_github('kevinblighe/EnhancedVolcano')                    # v1.13.2
+library(EnhancedVolcano)
+
+# Range of log2FC in res_aff_vs_unaff_subset_df_genename_05: -4.5 to 24.9
+# Rnge of padj: 8.426784e-06 to 4.948156e-02
+
+png("./deseq2/results/batch-corr_limma/2probands_vs_unaffected/EnhancedVolcano_res_aff_vs_unaff_subset_05_degs_final.png", width = 5600, height = 3200, res=300)
+keyvals = ifelse(
+  res_aff_vs_unaff_subset_df_genename$log2FoldChange < 0, 'mediumblue',
+  ifelse(res_aff_vs_unaff_subset_df_genename$log2FoldChange > 0, 'darkgoldenrod2', 'black'))
+keyvals[is.na(keyvals)] <- 'black'
+names(keyvals)[keyvals == 'darkgoldenrod2'] <- 'Up'
+names(keyvals)[keyvals == 'mediumblue'] <- 'Down'
+
+e = EnhancedVolcano(res_aff_vs_unaff_subset_df_genename,
+                lab = res_aff_vs_unaff_subset_df_genename$gene_name,
+                x = 'log2FoldChange',  y = 'padj', title = '2 Probands vs. Unaffected', subtitle = '150 DEGs (padjCutoff=0.05, FCcutoff=2)',
+                selectLab = (res_aff_vs_unaff_subset_df_genename$gene_name[res_aff_vs_unaff_subset_df_genename$gene_name %in%
+                                                                             res_aff_vs_unaff_subset_df_genename_05$gene_name])[which(names(keyvals) %in% c('Up', 'Down'))],
+                pCutoff = 0.05,  FCcutoff = 2,
+                cutoffLineWidth = 1,
+                pointSize = 3.0,
+                legendLabSize = 12,  legendIconSize = 8.0, legendLabels=c('Down','Up'),
+                drawConnectors = TRUE,
+                colCustom = keyvals
+               )
+e + ggplot2::coord_cartesian(xlim = c(-10, 25), ylim = c(0.0, 6.0)) + ggplot2::scale_x_continuous(breaks=seq(-10,25, 1))
+dev.off()
+```
+
+# (3) DEGs individual plots:
+## (i) plotCounts DEGs
+```{r}
+# Create the deseq2/results/batch-corr_limma/plotCounts folder
+if (!dir.exists("deseq2/results/batch-corr_limma/2probands_vs_unaffected/plotCounts_150degs_pid")) {
+  dir.create("deseq2/results/batch-corr_limma/2probands_vs_unaffected/plotCounts_150degs_pid")
+}
+```
+
+```{r}
+row.names(samples_subset) = samples_subset$Samples_id
+```
+
+```{r}
+# Define colors for 8 families
+library(RColorBrewer)
+additional_colors <- brewer.pal(8, "Set1")
+
+# Remove two colors to replace with salmon and royalblue for specific families  # for family 2 and 8
+additional_colors <- setdiff(additional_colors, c("salmon", "royalblue"))
+# Function to map specific family values to colors
+assign_colors <- function(family_levels)
+  {
+    # Start by making a named list of colors, initially empty
+    color_map <- setNames(vector("character", length(family_levels)), family_levels)
+    # Set specific colors for known values
+    color_map["2"] <- "salmon"
+    color_map["8"] <- "royalblue"
+    # Assign remaining colors from the palette to other family values
+    remaining_values <- setdiff(family_levels, c("2", "8"))
+    color_map[remaining_values] <- head(additional_colors, length(remaining_values))
+    return(color_map)
+}
+```
+
+```{r}
+# Extract genes table from res
+goi_table = res_aff_vs_unaff_subset_df_genename_05
+
+# Make plotCounts boxplot
+genes_oi_plot_Ensembl   = goi_table$Ensembl_ID
+genes_oi_plot_gene_name = goi_table$gene_name
+genes_oi_plot_padj      = goi_table$padj
+genes_oi_plot_log2FC    = goi_table$log2FoldChange
+Family = factor(samples_subset$Family)
+
+library(DESeq2)
+library(ggplot2)
+library(ggrepel)
+
+for (i in seq_along(genes_oi_plot_Ensembl)) {
+    boxplot_counts = plotCounts(dds_subset, gene=genes_oi_plot_Ensembl[i], intgroup=c("Affected"), returnData=TRUE, normalized = T)
+    boxplot_counts$variable = row.names(boxplot_counts)
+
+    # Add 'Patient_id' and 'Replicate' as new columns and update row names
+      #boxplot_counts$Patient_id = samples_subset[rownames(boxplot_counts), "Patient_id", drop = TRUE]
+      boxplot_counts$Family     = samples_subset[rownames(boxplot_counts), "Family", drop = TRUE]
+      boxplot_counts$Relation   = samples_subset[rownames(boxplot_counts), "Relation", drop = TRUE]
+      boxplot_counts$Replicate  = samples_subset[rownames(boxplot_counts), "Replicate", drop = TRUE]
+      rownames(boxplot_counts)  = with(samples_subset[rownames(boxplot_counts), ], paste(Family, Relation, Replicate, sep = "_"))
+
+      boxplot_counts$Family <- as.factor(boxplot_counts$Family)
+
+    # Retrieve unique family values and assign colors
+      family_levels <- levels(boxplot_counts$Family)
+      family_colors <- assign_colors(family_levels)
+
+    plot = ggplot(data=boxplot_counts, aes(x=Affected, y=count, fill=Affected)) +
+    geom_boxplot(position=position_dodge()) +
+    geom_jitter(position=position_dodge(.8)) +
+    labs(title = paste("Gene",genes_oi_plot_gene_name[i],sep = "_",genes_oi_plot_Ensembl[i]),
+         subtitle = paste("padj=",genes_oi_plot_padj[i],"; log2FC=",genes_oi_plot_log2FC[i])) +
+        xlab("") + ylab("Normalized gene counts") +
+        theme_bw() + theme(text = element_text(size=6), axis.text.x = element_text(angle=45, vjust=1,hjust=1)) +
+        scale_fill_manual(values = c("No"= "grey90", "Yes"= "grey40")) +
+        scale_color_manual(values = family_colors) +
+       # geom_point(color = "grey70", size=0.2) +
+        geom_point(data=boxplot_counts, aes(x=Affected, y=count, color=Family), size = 2) +
+        geom_text_repel(aes(label = rownames(boxplot_counts), color=Family), min.segment.length = 0, max.overlaps = Inf, box.padding = 0.5)
+    ggsave(filename=paste("DEG_",genes_oi_plot_gene_name[i],"_",genes_oi_plot_Ensembl[i],".png"),
+           width=10, height=5, plot=plot, path = "./deseq2/results/batch-corr_limma/2probands_vs_unaffected/plotCounts_150degs_pid")
+}
+```
