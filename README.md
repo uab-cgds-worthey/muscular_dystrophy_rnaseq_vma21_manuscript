@@ -1,4 +1,4 @@
-# Muscular Dystrophy Bulk RNA-Seq Analysis
+# Muscular Dystrophy Bulk RNA-Seq Analysis (DGE and Sashimi)
 
 [![Perform linting -
 Markdown](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml/badge.svg)](https://github.com/uab-cgds-worthey/cgds_repo_template/actions/workflows/linting.yml)
@@ -33,3 +33,6 @@ files (gene annotation, etc.) necessary to run them successfully.
 ## Manuscript preprint link
 
 - medRxiv:
+
+## Author: 
+[Gurpreet Kaur](https://github.com/gurpreet-bioinfo) 
